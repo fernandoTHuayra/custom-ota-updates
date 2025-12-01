@@ -113,7 +113,6 @@ export default async function manifestEndpoint(req: NextApiRequest, res: NextApi
     res.setHeader('content-type', `multipart/mixed; boundary=${form.getBoundary()}`);
     res.write(form.getBuffer());
     res.end();
-
   } catch (error) {
     console.error(error);
     res.statusCode = 500;

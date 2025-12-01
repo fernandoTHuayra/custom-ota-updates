@@ -77,7 +77,7 @@ export class SQLiteDatabaseAdapter implements DatabaseAdapter {
 
     async getAssetsForUpdate(updateId: string): Promise<Asset[]> {
         const db = await this.dbPromise;
-        return db.all<Asset[]>(
+        return await db.all<Asset[]>(
             `SELECT a.* FROM assets a
        JOIN update_assets ua ON a.key = ua.asset_key
        WHERE ua.update_id = ?`,
