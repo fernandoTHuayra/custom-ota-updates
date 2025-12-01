@@ -10,3 +10,4 @@ export interface Update {
 }
 
 export const dbAdapter = new SQLiteDatabaseAdapter();
+export const dbAdapter = new SQLiteDatabaseAdapter();
