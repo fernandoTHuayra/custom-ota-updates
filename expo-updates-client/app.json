@@ -13,7 +13,7 @@
     },
     "runtimeVersion": "2",
     "updates": {
-      "url": "http://10.0.2.2:3000/api/manifest",
+      "url": "https://otaupdates.huayra.com.ar:3000/api/manifest",
       "enabled": true,
       "fallbackToCacheTimeout": 30000,
       "codeSigningCertificate": "./code-signing/certificate.pem",
@@ -22,9 +22,7 @@
         "alg": "rsa-v1_5-sha256"
       }
     },
-    "assetBundlePatterns": [
-      "**/*"
-    ],
+    "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.test.expo-updates-client"
