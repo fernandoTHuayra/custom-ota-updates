@@ -194,6 +194,11 @@ async function uploadAsset(filename, buffer, contentType) {
   // Construct public URL
   // In production (VPS), this should be your domain: https://updates.tudominio.com/updates/assets
   const baseUrl = process.env.ASSETS_BASE_URL || 'http://10.0.2.2:3000/updates/assets';
+  if (!process.env.ASSETS_BASE_URL && process.env.NODE_ENV === 'production') {
+    throw new Error(
+      'ASSETS_BASE_URL is required in production. Refusing to publish assets with local fallback URL.',
+    );
+  }
   return `${baseUrl}/${filename}`;
 }
 
