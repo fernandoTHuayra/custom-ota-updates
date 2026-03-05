@@ -49,7 +49,6 @@ export default async function manifestEndpoint(req: NextApiRequest, res: NextApi
     const update = await dbAdapter.getLatestUpdate(runtimeVersion);
 
     if (!update) {
-      // TODO: Handle NoUpdateAvailable directive for protocol version 1
       res.statusCode = 404;
       res.json({ error: 'No update found' });
       return;
@@ -57,13 +56,43 @@ export default async function manifestEndpoint(req: NextApiRequest, res: NextApi
 
     const manifest = update.manifest;
 
-    // Check if we need to return NoUpdateAvailable (if client already has this update)
+    // If the client already has this update, no need to re-download
     const currentUpdateId = req.headers['expo-current-update-id'];
     if (currentUpdateId === convertSHA256HashToUUID(update.id) && protocolVersion === 1) {
-      // In a real implementation, we would return a NoUpdateAvailable directive here
-      // For now, just returning 404 or similar is a simple fallback, but let's stick to the plan
-      // The previous code threw NoUpdateAvailableError.
-      // Let's just return the update again for simplicity in this phase, or implement the directive.
+      res.statusCode = 200;
+      const noUpdateDirective = { type: 'noUpdateAvailable' };
+
+      let signature = null;
+      const expectSignatureHeader = req.headers['expo-expect-signature'];
+      if (expectSignatureHeader) {
+        const privateKey = await getPrivateKeyAsync();
+        if (privateKey) {
+          const directiveString = JSON.stringify(noUpdateDirective);
+          const hashSignature = signRSASHA256(directiveString, privateKey);
+          const dictionary = convertToDictionaryItemsRepresentation({
+            sig: hashSignature,
+            keyid: 'main',
+          });
+          signature = serializeDictionary(dictionary);
+        }
+      }
+
+      const form = new FormData();
+      form.append('directive', JSON.stringify(noUpdateDirective), {
+        contentType: 'application/json',
+        header: {
+          'content-type': 'application/json; charset=utf-8',
+          ...(signature ? { 'expo-signature': signature } : {}),
+        },
+      });
+
+      res.setHeader('expo-protocol-version', 1);
+      res.setHeader('expo-sfv-version', 0);
+      res.setHeader('cache-control', 'private, max-age=0');
+      res.setHeader('content-type', `multipart/mixed; boundary=${form.getBoundary()}`);
+      res.write(form.getBuffer());
+      res.end();
+      return;
     }
 
     let signature = null;
