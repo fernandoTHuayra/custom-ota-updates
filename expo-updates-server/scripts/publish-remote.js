@@ -38,7 +38,10 @@ function loadEnvFile(filePath) {
     const eqIndex = trimmed.indexOf('=');
     if (eqIndex === -1) continue;
     const key = trimmed.slice(0, eqIndex).trim();
-    const val = trimmed.slice(eqIndex + 1).trim().replace(/^["']|["']$/g, '');
+    const val = trimmed
+      .slice(eqIndex + 1)
+      .trim()
+      .replace(/^["']|["']$/g, '');
     if (!process.env[key]) {
       process.env[key] = val;
     }
@@ -58,7 +61,7 @@ const API_KEY = requiredEnv('PUBLISH_API_KEY');
 const clientDir = path.resolve(
   process.env.CLIENT_DIR || path.join(serverDir, '..', 'expo-updates-client'),
 );
-const ASSETS_BASE_URL = `${SERVER_URL}/updates/assets`;
+const ASSETS_BASE_URL = `${SERVER_URL}/api/assets`;
 
 if (!fs.existsSync(clientDir)) {
   console.error(`Client directory not found: ${clientDir}`);
@@ -113,7 +116,7 @@ function processAsset(buffer, ext, contentType, isLaunchAsset) {
     key,
     fileExtension: `.${suffix}`,
     contentType,
-    url: `${ASSETS_BASE_URL}/${filename}`,
+    url: `${ASSETS_BASE_URL}?asset=${filename}`,
     filename,
     data: buffer.toString('base64'),
   };
