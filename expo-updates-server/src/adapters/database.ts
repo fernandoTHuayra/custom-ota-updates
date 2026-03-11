@@ -48,7 +48,7 @@ export class SQLiteDatabaseAdapter implements DatabaseAdapter {
   async insertUpdate(update: Update): Promise<void> {
     const db = await this.dbPromise;
     await db.run(
-      'INSERT INTO updates (id, runtime_version, created_at, manifest) VALUES (?, ?, ?, ?)',
+      'INSERT OR REPLACE INTO updates (id, runtime_version, created_at, manifest) VALUES (?, ?, ?, ?)',
       update.id,
       update.runtime_version,
       update.created_at,
