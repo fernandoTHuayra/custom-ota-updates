@@ -3,9 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "cross-env PRIVATE_KEY_PATH=code-signing-keys/private-key.pem next dev --turbopack",
+    "dev": "next dev --turbopack",
     "build": "next build",
-    "start": "cross-env PRIVATE_KEY_PATH=code-signing-keys/private-key.pem node server.js",
+    "start": "node server.js",
     "lint": "eslint common pages",
     "test": "jest",
     "init-db": "node scripts/init-db.js"

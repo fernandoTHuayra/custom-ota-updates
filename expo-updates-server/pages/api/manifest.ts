@@ -1,10 +1,9 @@
 import FormData from 'form-data';
 import { NextApiRequest, NextApiResponse } from 'next';
-import { serializeDictionary } from 'structured-headers';
 
 import {
   convertSHA256HashToUUID,
-  convertToDictionaryItemsRepresentation,
+  formatExpoSignatureHeader,
   signRSASHA256,
   getPrivateKeyAsync,
 } from '../../common/helpers';
@@ -69,11 +68,7 @@ export default async function manifestEndpoint(req: NextApiRequest, res: NextApi
         if (privateKey) {
           const directiveString = JSON.stringify(noUpdateDirective);
           const hashSignature = signRSASHA256(directiveString, privateKey);
-          const dictionary = convertToDictionaryItemsRepresentation({
-            sig: hashSignature,
-            keyid: 'main',
-          });
-          signature = serializeDictionary(dictionary);
+          signature = formatExpoSignatureHeader(hashSignature);
         }
       }
 
@@ -98,21 +93,22 @@ export default async function manifestEndpoint(req: NextApiRequest, res: NextApi
     let signature = null;
     const expectSignatureHeader = req.headers['expo-expect-signature'];
     if (expectSignatureHeader) {
-      const privateKey = await getPrivateKeyAsync();
-      if (!privateKey) {
-        res.statusCode = 400;
-        res.json({
-          error: 'Code signing requested but no key supplied when starting server.',
-        });
-        return;
+      if (update.signature) {
+        signature = formatExpoSignatureHeader(update.signature);
+      } else {
+        const privateKey = await getPrivateKeyAsync();
+        if (!privateKey) {
+          res.statusCode = 400;
+          res.json({
+            error:
+              'Code signing requested but no stored signature is available for this legacy update.',
+          });
+          return;
+        }
+        const manifestString = JSON.stringify(manifest);
+        const hashSignature = signRSASHA256(manifestString, privateKey);
+        signature = formatExpoSignatureHeader(hashSignature);
       }
-      const manifestString = JSON.stringify(manifest);
-      const hashSignature = signRSASHA256(manifestString, privateKey);
-      const dictionary = convertToDictionaryItemsRepresentation({
-        sig: hashSignature,
-        keyid: 'main',
-      });
-      signature = serializeDictionary(dictionary);
     }
 
     const assetRequestHeaders: { [key: string]: object } = {};

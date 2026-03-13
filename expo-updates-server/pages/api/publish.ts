@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { NextApiRequest, NextApiResponse } from 'next';
 
+import { getCertificateAsync, verifyRSASHA256 } from '../../common/helpers';
 import { dbAdapter } from '../../src/adapters/database';
 
 const PUBLISH_API_KEY = process.env.PUBLISH_API_KEY;
@@ -25,6 +26,7 @@ interface AssetPayload {
 
 interface PublishPayload {
   runtimeVersion: string;
+  signature: string;
   manifest: {
     id: string;
     createdAt: string;
@@ -64,15 +66,39 @@ export default async function publishEndpoint(req: NextApiRequest, res: NextApiR
     const body: PublishPayload = req.body;
 
     // Validate required fields
-    if (!body.runtimeVersion || !body.manifest || !body.assets) {
+    if (!body.runtimeVersion || !body.manifest || !body.assets || !body.signature) {
       res.statusCode = 400;
-      res.json({ error: 'Missing required fields: runtimeVersion, manifest, assets.' });
+      res.json({ error: 'Missing required fields: runtimeVersion, manifest, assets, signature.' });
       return;
     }
 
     if (!body.manifest.id || !body.manifest.createdAt) {
       res.statusCode = 400;
       res.json({ error: 'Manifest must include id and createdAt.' });
+      return;
+    }
+
+    const certificate = await getCertificateAsync();
+    if (!certificate) {
+      console.error(
+        'certificate.pem is missing. Refusing publish request because manifest signatures cannot be verified.',
+      );
+      res.statusCode = 500;
+      res.json({
+        error: 'Server is missing certificate.pem required to verify publish signatures.',
+      });
+      return;
+    }
+
+    const isValidSignature = verifyRSASHA256(
+      JSON.stringify(body.manifest),
+      body.signature,
+      certificate,
+    );
+
+    if (!isValidSignature) {
+      res.statusCode = 400;
+      res.json({ error: 'Invalid manifest signature' });
       return;
     }
 
@@ -127,6 +153,7 @@ export default async function publishEndpoint(req: NextApiRequest, res: NextApiR
       runtime_version: body.runtimeVersion,
       created_at: body.manifest.createdAt,
       manifest: body.manifest,
+      signature: body.signature,
     });
 
     // Link update to assets concurrently

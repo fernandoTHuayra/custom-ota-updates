@@ -16,6 +16,7 @@
  * Environment variables (can go in .env):
  *   OTA_SERVER_URL         - Required. e.g. https://otaupdates.example.com:3000
  *   OTA_API_KEY            - Required. Bearer token for POST /api/publish
+ *   OTA_PRIVATE_KEY_PATH   - Required. Path to the local RSA private key used to sign manifests
  *   EXPO_PUBLISH_PLATFORMS - Optional. "ios", "android", or "ios,android" (default)
  *
  * For multi-variant projects (app.config.js + env variable):
@@ -94,9 +95,40 @@ function requiredEnv(name) {
   return val;
 }
 
+function resolveProjectPath(filePath) {
+  return path.isAbsolute(filePath)
+    ? filePath
+    : path.resolve(PROJECT_ROOT, filePath);
+}
+
+function requiredFilePath(name) {
+  const configuredPath = requiredEnv(name);
+  const resolvedPath = resolveProjectPath(configuredPath);
+  if (!fs.existsSync(resolvedPath)) {
+    console.error(
+      `Error: ${name} points to a file that does not exist: ${resolvedPath}`,
+    );
+    process.exit(1);
+  }
+  return resolvedPath;
+}
+
 const SERVER_URL = requiredEnv("OTA_SERVER_URL");
 const API_KEY = requiredEnv("OTA_API_KEY");
+const PRIVATE_KEY_PATH = requiredFilePath("OTA_PRIVATE_KEY_PATH");
+const CERTIFICATE_PATH = path.join(
+  PROJECT_ROOT,
+  "code-signing",
+  "certificate.pem",
+);
 const ASSETS_BASE_URL = `${SERVER_URL}/api/assets`;
+
+if (!fs.existsSync(CERTIFICATE_PATH)) {
+  console.error(
+    `Error: certificate.pem not found at ${CERTIFICATE_PATH}. Local signature verification requires the public certificate.`,
+  );
+  process.exit(1);
+}
 
 // ─── MIME map ────────────────────────────────────────────────────────────────
 
@@ -175,6 +207,20 @@ function toUUID(hex) {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
 }
 
+function signManifest(manifestString, privateKey) {
+  const signer = crypto.createSign("RSA-SHA256");
+  signer.update(manifestString, "utf8");
+  signer.end();
+  return signer.sign(privateKey, "base64");
+}
+
+function verifyManifestSignature(manifestString, signature, certificate) {
+  const verifier = crypto.createVerify("RSA-SHA256");
+  verifier.update(manifestString, "utf8");
+  verifier.end();
+  return verifier.verify(certificate, signature, "base64");
+}
+
 // ─── Main ────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -189,6 +235,8 @@ async function main() {
 
   const platforms = parsePlatforms();
   const distDir = path.join(PROJECT_ROOT, "dist");
+  const privateKey = fs.readFileSync(PRIVATE_KEY_PATH, "utf8");
+  const certificate = fs.readFileSync(CERTIFICATE_PATH, "utf8");
 
   console.log(
     `Runtime: ${runtimeVersion} | Platforms: ${platforms.join(", ")} | Server: ${SERVER_URL}`,
@@ -262,10 +310,21 @@ async function main() {
       extra: { expoClient: expoConfig },
     };
 
+    const manifestString = JSON.stringify(manifest);
+    const signature = signManifest(manifestString, privateKey);
+
+    if (!verifyManifestSignature(manifestString, signature, certificate)) {
+      console.error(
+        `Error: local signature verification failed for ${platform}. OTA_PRIVATE_KEY_PATH does not match code-signing/certificate.pem.`,
+      );
+      process.exit(1);
+    }
+
     // 5. Upload
     const payload = JSON.stringify({
       runtimeVersion,
       manifest,
+      signature,
       assets: allAssets.map(({ filename, key, contentType, url, data }) => ({
         filename,
         key,
