@@ -35,7 +35,8 @@ The flow for creating an update is as follows:
 ## The setup
 
 Note: The app is configured to load updates from the server running at http://localhost:3000. If you prefer to load them from a different base URL (for example, in an Android emulator):
-1. Update `.env.local` in the server.
+
+1. Update `HOSTNAME` in the server configuration.
 2. Update `updates.url` in `app.json` and re-run the build steps below.
 
 ### Create a "release" app
@@ -54,7 +55,7 @@ Run `yarn` and then run `yarn android --variant release`.
 
 Let's make a change to the project in /expo-updates-client that we'll want to push as an over-the-air update from our custom server to the "release" app. `cd` in to **/expo-updates-client**, then make a change in **App.js**.
 
-Once you've made a change you're happy with, inside of **/expo-updates-server**, run `yarn expo-publish`. Under the hood, this script runs `npx expo export` in the client, copies the exported app to the server, and then copies the Expo config to the server as well.
+Once you've made a change you're happy with, inside of **/expo-updates-client**, run `yarn publish-ota`. Under the hood, this script runs `npx expo export` in the client, processes the exported assets, and uploads the manifest and assets to the OTA server.
 
 ### Send an update
 
