@@ -44,6 +44,12 @@ export default function assetsEndpoint(req: NextApiRequest, res: NextApiResponse
 
   // Prevent directory traversal
   const safeName = path.basename(assetName);
+  if (safeName !== assetName) {
+    res.statusCode = 400;
+    res.json({ error: 'Invalid asset name. Expected a filename only.' });
+    return;
+  }
+
   const filePath = path.join(ASSETS_DIR, safeName);
 
   if (!fs.existsSync(filePath)) {

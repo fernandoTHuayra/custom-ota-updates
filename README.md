@@ -21,15 +21,15 @@ To understand this repo, it's important to understand some terminology around up
 - **Platform**: Type: "ios" or "android". Specifies which platform to to provide an update.
 - **Manifest**: Described in the protocol. The manifest is an object that describes assets and other details that an Expo app needs to know to load an update.
 
-### How the `expo-update-server` works
+### How the `expo-updates-server` works
 
 The flow for creating an update is as follows:
 
 1. Configure and build a "release" version of an app, then run it on a simulator or deploy to an app store.
 2. Run the project locally, make changes, then export the app as an update.
-3. In the server repo, we'll copy the update made in #2 to the **expo-update-server/updates** directory, under a corresponding runtime version sub-directory.
-4. In the "release" app, force close and reopen the app to make a request for an update from the custom update server. The server will return a manifest that matches the requests platform and runtime version.
-5. Once the "release" app receives the manifest, it will then make requests for each asset, which will also be served from this server.
+3. From **/expo-updates-client**, run `yarn publish-ota` to sign the manifest locally, upload the manifest and assets to `POST /api/publish`, and persist them in SQLite and `public/updates/assets/`.
+4. In the "release" app, force close and reopen the app to make a request for an update from the custom update server. The server will return the latest manifest that matches the request's platform and runtime version.
+5. Once the "release" app receives the manifest, it will then make requests for each asset using `GET /api/assets?asset=<filename>`.
 6. Once the app has all the required assets it needs from the server, it will load the update.
 
 ## The setup
@@ -57,6 +57,10 @@ Let's make a change to the project in /expo-updates-client that we'll want to pu
 
 Once you've made a change you're happy with, inside of **/expo-updates-client**, run `yarn publish-ota`. Under the hood, this script runs `npx expo export` in the client, processes the exported assets, and uploads the manifest and assets to the OTA server.
 
+When `OTA_CLEANUP_ENABLED=true` on the server, each successful publish also launches a detached cleanup job that retains only the latest `OTA_CLEANUP_KEEP_LATEST` updates per runtime version and removes orphaned asset files from disk and SQLite. You can also run it manually with `yarn cleanup-updates` inside **/expo-updates-server**.
+
+If you need to wipe all OTA data and uploaded assets, run `yarn reset-updates` inside **/expo-updates-server**.
+
 ### Send an update
 
 Now we're ready to run the update server. Run `yarn dev` in the server folder of this repo to start the server.
@@ -65,6 +69,6 @@ In the simulator running the "release" version of the app, force close the app a
 
 ## About this server
 
-This server was created with NextJS. You can find the API endpoints in **pages/api/manifest.js** and **pages/api/assets.js**.
+This server was created with NextJS. You can find the API endpoints in **pages/api/manifest.ts**, **pages/api/publish.ts**, and **pages/api/assets.ts**.
 
 The code signing keys and certificates were generated using https://github.com/expo/code-signing-certificates.

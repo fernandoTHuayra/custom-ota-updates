@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { spawn } from 'child_process';
 import { NextApiRequest, NextApiResponse } from 'next';
 
 import { getCertificateAsync, verifyRSASHA256 } from '../../common/helpers';
@@ -7,6 +8,37 @@ import { dbAdapter } from '../../src/adapters/database';
 
 const PUBLISH_API_KEY = process.env.PUBLISH_API_KEY;
 const PUBLIC_ASSETS_DIR = path.join(process.cwd(), 'public', 'updates', 'assets');
+const CLEANUP_SCRIPT_PATH = path.join(process.cwd(), 'scripts', 'cleanup-updates.js');
+const CLEANUP_ENABLED = process.env.OTA_CLEANUP_ENABLED !== 'false';
+
+function triggerCleanupJob(runtimeVersion: string, platform: 'ios' | 'android') {
+  if (!CLEANUP_ENABLED) {
+    return;
+  }
+
+  if (!fs.existsSync(CLEANUP_SCRIPT_PATH)) {
+    console.warn(
+      `Cleanup script not found at ${CLEANUP_SCRIPT_PATH}. Skipping post-publish cleanup.`,
+    );
+    return;
+  }
+
+  try {
+    const child = spawn(
+      process.execPath,
+      [CLEANUP_SCRIPT_PATH, '--runtimeVersion', runtimeVersion, '--platform', platform],
+      {
+        cwd: process.cwd(),
+        detached: true,
+        stdio: 'ignore',
+        env: process.env,
+      },
+    );
+    child.unref();
+  } catch (error) {
+    console.error('Failed to start OTA cleanup job:', error);
+  }
+}
 
 export const config = {
   api: {
@@ -26,6 +58,7 @@ interface AssetPayload {
 
 interface PublishPayload {
   runtimeVersion: string;
+  platform: 'ios' | 'android';
   signature: string;
   manifest: {
     id: string;
@@ -66,9 +99,23 @@ export default async function publishEndpoint(req: NextApiRequest, res: NextApiR
     const body: PublishPayload = req.body;
 
     // Validate required fields
-    if (!body.runtimeVersion || !body.manifest || !body.assets || !body.signature) {
+    if (
+      !body.runtimeVersion ||
+      !body.platform ||
+      !body.manifest ||
+      !body.assets ||
+      !body.signature
+    ) {
       res.statusCode = 400;
-      res.json({ error: 'Missing required fields: runtimeVersion, manifest, assets, signature.' });
+      res.json({
+        error: 'Missing required fields: runtimeVersion, platform, manifest, assets, signature.',
+      });
+      return;
+    }
+
+    if (body.platform !== 'ios' && body.platform !== 'android') {
+      res.statusCode = 400;
+      res.json({ error: 'Invalid platform. Expected ios or android.' });
       return;
     }
 
@@ -151,6 +198,7 @@ export default async function publishEndpoint(req: NextApiRequest, res: NextApiR
     await dbAdapter.insertUpdate({
       id: body.manifest.id,
       runtime_version: body.runtimeVersion,
+      platform: body.platform,
       created_at: body.manifest.createdAt,
       manifest: body.manifest,
       signature: body.signature,
@@ -162,14 +210,17 @@ export default async function publishEndpoint(req: NextApiRequest, res: NextApiR
     );
 
     console.log(
-      `Published update ${body.manifest.id} for runtime ${body.runtimeVersion} with ${body.assets.length} assets`,
+      `Published update ${body.manifest.id} for runtime ${body.runtimeVersion} on ${body.platform} with ${body.assets.length} assets`,
     );
+
+    triggerCleanupJob(body.runtimeVersion, body.platform);
 
     res.statusCode = 200;
     res.json({
       success: true,
       updateId: body.manifest.id,
       runtimeVersion: body.runtimeVersion,
+      platform: body.platform,
       assetsWritten: writtenAssets.length,
     });
   } catch (error: any) {

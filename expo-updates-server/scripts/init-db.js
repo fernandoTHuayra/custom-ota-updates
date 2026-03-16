@@ -12,6 +12,7 @@ async function initDb() {
     CREATE TABLE IF NOT EXISTS updates (
       id TEXT PRIMARY KEY,
       runtime_version TEXT NOT NULL,
+      platform TEXT,
       created_at TEXT NOT NULL,
       manifest TEXT NOT NULL,
       signature TEXT
@@ -36,13 +37,28 @@ async function initDb() {
   if (!columns.some((column) => column.name === 'signature')) {
     await db.exec('ALTER TABLE updates ADD COLUMN signature TEXT');
   }
+  if (!columns.some((column) => column.name === 'platform')) {
+    await db.exec('ALTER TABLE updates ADD COLUMN platform TEXT');
+  }
+
+  await db.exec(
+    'CREATE INDEX IF NOT EXISTS idx_updates_runtime_platform_created_at ON updates(runtime_version, platform, created_at DESC)',
+  );
 
   await db.exec(`
     DELETE FROM update_assets
-    WHERE update_id IN (SELECT id FROM updates WHERE signature IS NULL);
+    WHERE update_id IN (
+      SELECT id
+      FROM updates
+      WHERE signature IS NULL
+        OR platform IS NULL
+        OR platform NOT IN ('ios', 'android')
+    );
 
     DELETE FROM updates
-    WHERE signature IS NULL;
+    WHERE signature IS NULL
+       OR platform IS NULL
+       OR platform NOT IN ('ios', 'android');
 
     DELETE FROM assets
     WHERE key NOT IN (SELECT asset_key FROM update_assets);

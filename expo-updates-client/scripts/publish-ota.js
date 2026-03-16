@@ -323,6 +323,7 @@ async function main() {
     // 5. Upload
     const payload = JSON.stringify({
       runtimeVersion,
+      platform,
       manifest,
       signature,
       assets: allAssets.map(({ filename, key, contentType, url, data }) => ({

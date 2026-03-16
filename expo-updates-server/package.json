@@ -8,7 +8,10 @@
     "start": "node server.js",
     "lint": "eslint common pages",
     "test": "jest",
-    "init-db": "node scripts/init-db.js"
+    "init-db": "node scripts/init-db.js",
+    "reset-updates": "node scripts/reset-updates.js",
+    "cleanup-updates": "node scripts/cleanup-updates.js",
+    "cleanup-updates:dry-run": "node scripts/cleanup-updates.js --dry-run"
   },
   "dependencies": {
     "form-data": "^4.0.4",

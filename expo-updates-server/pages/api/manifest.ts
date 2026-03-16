@@ -45,11 +45,19 @@ export default async function manifestEndpoint(req: NextApiRequest, res: NextApi
   }
 
   try {
-    const update = await dbAdapter.getLatestUpdate(runtimeVersion);
+    const update = await dbAdapter.getLatestUpdate(runtimeVersion, platform);
 
     if (!update) {
       res.statusCode = 404;
       res.json({ error: 'No update found' });
+      return;
+    }
+
+    if (!update.signature) {
+      res.statusCode = 500;
+      res.json({
+        error: 'Stored update is missing the required signature for the current OTA flow.',
+      });
       return;
     }
 
@@ -93,22 +101,7 @@ export default async function manifestEndpoint(req: NextApiRequest, res: NextApi
     let signature = null;
     const expectSignatureHeader = req.headers['expo-expect-signature'];
     if (expectSignatureHeader) {
-      if (update.signature) {
-        signature = formatExpoSignatureHeader(update.signature);
-      } else {
-        const privateKey = await getPrivateKeyAsync();
-        if (!privateKey) {
-          res.statusCode = 400;
-          res.json({
-            error:
-              'Code signing requested but no stored signature is available for this legacy update.',
-          });
-          return;
-        }
-        const manifestString = JSON.stringify(manifest);
-        const hashSignature = signRSASHA256(manifestString, privateKey);
-        signature = formatExpoSignatureHeader(hashSignature);
-      }
+      signature = formatExpoSignatureHeader(update.signature);
     }
 
     const assetRequestHeaders: { [key: string]: object } = {};
